@@ -1,0 +1,10 @@
+{
+  "name": "Noviq AI",
+  "short_name": "Noviq",
+  "description": "Your intelligent thinking partner.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f8fa",
+  "theme_color": "#325cdb",
+  "icons": [{"src": "/static/Noviq%20AI%20Glossy%20Ribbon%20Logo.png", "sizes": "any", "type": "image/png", "purpose": "any maskable"}]
+}

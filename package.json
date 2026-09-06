@@ -1,0 +1,14 @@
+{
+  "name": "noviq-ai",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "npx --yes --package=netlify-cli@23.15.1 netlify dev"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
