@@ -91,6 +91,6 @@ module.exports = async function handler(req, res) {
     });
   } catch (error) {
     console.error(error);
-    return json(res, 500, { error: `Error: ${error.message || String(error)}` });
+    return json(res, 500, { error: error.message || 'Internal server error.' });
   }
 };

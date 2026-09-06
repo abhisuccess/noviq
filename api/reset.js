@@ -10,6 +10,6 @@ module.exports = async function handler(req, res) {
     return json(res, 200, { status: 'success' });
   } catch (error) {
     console.error(error);
-    return json(res, 400, { error: 'Invalid request body.' });
+    return json(res, 400, { error: error.message || 'Invalid request body.' });
   }
 };
