@@ -1,10 +1,7 @@
 const {
   json,
-  getDeviceId,
   consumePrompt,
   quotaResponse,
-  readHistory,
-  writeHistory,
   EFFORT_SETTINGS,
   NOVIQ_SYSTEM_INSTRUCTION,
   DEVELOPER_QUESTION,
@@ -19,11 +16,10 @@ module.exports = async function handler(req, res) {
     const data = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const userMessage = String(data.message || '').trim();
     const sessionId = String(data.session_id || 'default');
-    const deviceId = getDeviceId(req);
 
     if (!userMessage) return json(res, 400, { error: 'No message provided' });
 
-    const usage = await consumePrompt(deviceId);
+    const usage = consumePrompt(data.prompt_count);
     if (!usage.allowed) {
       return json(res, 429, {
         error: 'You have used all 5 prompts for the last 24 hours.',
@@ -31,7 +27,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const history = await readHistory(deviceId, sessionId);
+    const history = Array.isArray(data.history) ? data.history.slice(-40) : [];
     const model = String(data.model || process.env.GEMINI_MODEL || 'gemini-3.6-flash').replace(/^models\//, '');
     const effort = String(data.effort || 'standard').toLowerCase();
     const generationConfig = EFFORT_SETTINGS[effort] || EFFORT_SETTINGS.standard;
@@ -77,12 +73,6 @@ module.exports = async function handler(req, res) {
 
       if (!aiMessage) return json(res, 502, { error: 'Gemini returned an empty response. Please try again.' });
     }
-
-    await writeHistory(deviceId, sessionId, [
-      ...history,
-      { role: 'user', parts: [{ text: userMessage }] },
-      { role: 'model', parts: [{ text: aiMessage }] }
-    ]);
 
     return json(res, 200, {
       response: aiMessage,

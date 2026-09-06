@@ -32,6 +32,12 @@ if (!deviceId) { deviceId = crypto.randomUUID ? crypto.randomUUID() : 'device_' 
 function makeChat() { return { id: 'chat_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), title: 'New conversation', messages: [] }; }
 function saveChats() { localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations)); }
 function currentSession() { return currentChat ? currentChat.id : ''; }
+function requestHistory() {
+    return (currentChat?.messages || []).slice(-40).map(message => ({
+        role: message.sender === 'bot' ? 'model' : 'user',
+        parts: [{ text: String(message.text || '') }]
+    }));
+}
 function updateQuota(quota) {
     if (!quota) return;
     promptsUsed = quota.used;
@@ -119,7 +125,7 @@ async function sendMessage() {
     userInput.value = ''; userInput.style.height = 'auto'; typingIndicator.style.display = 'flex'; sendBtn.disabled = true;
     thinkingText.textContent = effortSelect.value === 'max' ? 'Noviq is thinking deeply...' : 'Noviq is thinking...';
     try {
-        const response = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-ID': deviceId }, body: JSON.stringify({ message, session_id: currentSession(), model: composerModelSelect.value, effort: effortSelect.value }) });
+        const response = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-ID': deviceId }, body: JSON.stringify({ message, session_id: currentSession(), model: composerModelSelect.value, effort: effortSelect.value, prompt_count: promptsUsed, history: requestHistory().slice(0, -1) }) });
         const data = await response.json();
         updateQuota(data.quota);
         const reply = data.error ? '⚠️ ' + data.error : data.response;

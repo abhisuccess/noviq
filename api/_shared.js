@@ -1,17 +1,3 @@
-const { Redis } = require('@upstash/redis');
-const crypto = require('node:crypto');
-
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-const kv = redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null;
-
-function requireRedis() {
-  if (!kv) {
-    throw new Error('Redis is not configured. Add KV_REST_API_URL and KV_REST_API_TOKEN in Vercel.');
-  }
-  return kv;
-}
-
 const PROMPT_LIMIT = 5;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -40,16 +26,6 @@ function json(res, statusCode, body) {
     .json(body);
 }
 
-function hash(value) {
-  return crypto.createHash('sha256').update(value).digest('hex');
-}
-
-function getDeviceId(req) {
-  const deviceId = req.headers['x-device-id'];
-  const forwardedIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress;
-  return String(deviceId || forwardedIp || 'unknown').split(',')[0].trim();
-}
-
 function quotaResponse(count, resetAt) {
   return {
     used: count,
@@ -59,46 +35,21 @@ function quotaResponse(count, resetAt) {
   };
 }
 
-async function consumePrompt(deviceId) {
-  const redis = requireRedis();
+function consumePrompt(promptCount) {
   const now = Date.now();
-  const key = `noviq:usage:${hash(deviceId)}`;
-  const previous = (await redis.get(key)) || [];
-  const timestamps = previous.filter((timestamp) => now - timestamp < DAY_MS);
+  const count = Math.max(0, Math.min(PROMPT_LIMIT, Number(promptCount) || 0));
 
-  if (timestamps.length >= PROMPT_LIMIT) {
-    return {
-      allowed: false,
-      count: timestamps.length,
-      resetAt: Math.min(...timestamps) + DAY_MS
-    };
+  if (count >= PROMPT_LIMIT) {
+    return { allowed: false, count, resetAt: now + DAY_MS };
   }
 
-  timestamps.push(now);
-  await redis.set(key, timestamps, { ex: 60 * 60 * 25 });
-  return { allowed: true, count: timestamps.length, resetAt: now + DAY_MS };
-}
-
-async function readHistory(deviceId, sessionId) {
-  return (await requireRedis().get(`noviq:history:${hash(`${deviceId}:${sessionId}`)}`)) || [];
-}
-
-async function writeHistory(deviceId, sessionId, history) {
-  await requireRedis().set(`noviq:history:${hash(`${deviceId}:${sessionId}`)}`, history, { ex: 60 * 60 * 24 * 30 });
-}
-
-async function deleteHistory(deviceId, sessionId) {
-  await requireRedis().del(`noviq:history:${hash(`${deviceId}:${sessionId}`)}`);
+  return { allowed: true, count: count + 1, resetAt: now + DAY_MS };
 }
 
 module.exports = {
   json,
-  getDeviceId,
   consumePrompt,
   quotaResponse,
-  readHistory,
-  writeHistory,
-  deleteHistory,
   EFFORT_SETTINGS,
   NOVIQ_SYSTEM_INSTRUCTION,
   DEVELOPER_QUESTION,

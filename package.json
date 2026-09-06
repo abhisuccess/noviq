@@ -9,7 +9,6 @@
     "dev": "npx --yes --package=netlify-cli@23.15.1 netlify dev"
   },
   "dependencies": {
-    "@netlify/blobs": "^8.1.0",
-    "@upstash/redis": "^1.35.3"
+    "@netlify/blobs": "^8.1.0"
   }
 }
