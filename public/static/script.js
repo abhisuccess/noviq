@@ -39,7 +39,11 @@ function setTheme(theme) {
     const isDark = theme === 'dark';
     document.body.classList.toggle('dark-mode', isDark);
     localStorage.setItem(THEME_KEY, theme);
-    if (themeToggle) themeToggle.textContent = isDark ? 'Light mode' : 'Dark mode';
+    if (themeToggle) {
+        themeToggle.innerHTML = `<span aria-hidden="true">${isDark ? '☀' : '☾'}</span>`;
+        themeToggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+        themeToggle.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+    }
 }
 
 function normalizeSharedChat(chat) {
@@ -177,15 +181,49 @@ function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 }
 
+function applyInlineMarkdown(text) {
+    return text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+
 function formatAssistantMessage(value) {
-    let html = escapeHtml(String(value).replace(/\r\n/g, '\n')).trim();
-    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-    html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>').replace(/^## (.+)$/gm, '<h3>$1</h3>').replace(/^# (.+)$/gm, '<h2>$1</h2>');
-    html = html.replace(/^\|(.+)\|$/gm, line => '<div class="table-line">' + line.split('|').slice(1, -1).map(cell => `<span>${cell.trim()}</span>`).join('') + '</div>');
-    html = html.replace(/^(?:[-*])\s+(.+)$/gm, '<li>$1</li>').replace(/^(\d+)\.\s+(.+)$/gm, '<li>$2</li>');
-    html = html.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*([^*\n]+)\*/g, '<em>$1</em>').replace(/`([^`]+)`/g, '<code>$1</code>');
-    return html.split(/\n{2,}/).map(block => block.trim().startsWith('<') ? block.trim() : `<p>${block.trim().replace(/\n/g, '<br>')}</p>`).join('');
+    let source = String(value ?? '').replace(/\r\n/g, '\n').trim();
+    if (!source) return '';
+
+    const codeBlocks = [];
+    source = source.replace(/```([\s\S]*?)```/g, (_match, code) => {
+        const token = `__CODE_BLOCK_${codeBlocks.length}__`;
+        codeBlocks.push(`<pre><code>${escapeHtml(code.trim())}</code></pre>`);
+        return token;
+    });
+
+    source = escapeHtml(source);
+    const sections = source.split(/\n{2,}/).map(section => section.trim()).filter(Boolean);
+
+    return sections.map((section) => {
+        if (section.startsWith('__CODE_BLOCK_')) {
+            const index = Number(section.match(/\d+/)[0]);
+            return codeBlocks[index] || '';
+        }
+
+        if (section.startsWith('### ')) return `<h4>${applyInlineMarkdown(section.slice(4).trim())}</h4>`;
+        if (section.startsWith('## ')) return `<h3>${applyInlineMarkdown(section.slice(3).trim())}</h3>`;
+        if (section.startsWith('# ')) return `<h2>${applyInlineMarkdown(section.slice(2).trim())}</h2>`;
+
+        const lines = section.split('\n').map(line => line.trim()).filter(Boolean);
+
+        if (lines.every(line => /^[-*]\s+/.test(line))) {
+            return `<ul>${lines.map(line => `<li>${applyInlineMarkdown(line.replace(/^[-*]\s+/, ''))}</li>`).join('')}</ul>`;
+        }
+
+        if (lines.every(line => /^\d+\.\s+/.test(line))) {
+            return `<ol>${lines.map(line => `<li>${applyInlineMarkdown(line.replace(/^\d+\.\s+/, ''))}</li>`).join('')}</ol>`;
+        }
+
+        return `<p>${applyInlineMarkdown(lines.join('<br>'))}</p>`;
+    }).join('');
 }
 
 async function checkConnection() {
@@ -282,8 +320,14 @@ async function shareChat() {
 
     try {
         await navigator.clipboard.writeText(shareLink);
-        shareButton.textContent = 'Link copied';
-        setTimeout(() => { shareButton.textContent = 'Share chat'; }, 1500);
+        shareButton.innerHTML = '<span aria-hidden="true">✓</span>';
+        shareButton.setAttribute('aria-label', 'Link copied');
+        shareButton.title = 'Link copied';
+        setTimeout(() => {
+            shareButton.innerHTML = '<span aria-hidden="true">↗</span>';
+            shareButton.setAttribute('aria-label', 'Share chat');
+            shareButton.title = 'Share chat';
+        }, 1500);
     } catch {
         window.prompt('Copy this chat link:', shareLink);
     }
