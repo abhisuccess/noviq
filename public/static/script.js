@@ -20,6 +20,7 @@ const quotaLabel = document.getElementById('quotaLabel');
 const thinkingText = document.getElementById('thinkingText');
 const themeToggle = document.getElementById('themeToggle');
 const shareButton = document.getElementById('shareButton');
+const shareToast = document.getElementById('shareToast');
 const STORAGE_KEY = 'noviq-ai-chats';
 const DEVICE_KEY = 'noviq-ai-device-id';
 const THEME_KEY = 'noviq-theme';
@@ -30,6 +31,7 @@ let deferredInstallPrompt = null;
 let promptsUsed = Number(localStorage.getItem('noviq-prompts-used') || 0);
 let quotaResetAt = localStorage.getItem('noviq-quota-reset-at') || '';
 let pendingThinkingMessage = null;
+let shareToastTimer = null;
 
 function safeJsonParse(value, fallback) {
     try { return JSON.parse(value || 'null') ?? fallback; } catch { return fallback; }
@@ -93,19 +95,30 @@ function requestHistory() {
         parts: [{ text: String(message.text || '') }]
     }));
 }
+function applyQuotaMeter() {
+    if (!quotaMeter) return;
+
+    const progress = Math.min((promptsUsed / 5) * 100, 100);
+    quotaMeter.style.setProperty('--progress', `${progress}%`);
+    quotaMeter.setAttribute('aria-label', `${Math.min(promptsUsed, 5)}/5 prompts used`);
+    quotaMeter.title = `${Math.min(promptsUsed, 5)}/5 prompts used`;
+
+    if (quotaLabel) {
+        quotaLabel.textContent = promptsUsed >= 5 ? 'Daily limit reached' : `${Math.max(0, 5 - promptsUsed)} left today`;
+    }
+}
+
 function updateQuota(quota) {
     if (!quota) return;
     promptsUsed = quota.used;
     quotaResetAt = quota.reset_at || '';
     localStorage.setItem('noviq-prompts-used', String(promptsUsed));
     localStorage.setItem('noviq-quota-reset-at', quotaResetAt);
-    [...quotaMeter.children].forEach((circle, index) => circle.classList.toggle('used', index < promptsUsed));
-    quotaLabel.textContent = quota.remaining ? `${quota.remaining} left today` : 'Available tomorrow';
+    applyQuotaMeter();
 }
 
 function restoreQuota() {
-    [...quotaMeter.children].forEach((circle, index) => circle.classList.toggle('used', index < promptsUsed));
-    quotaLabel.textContent = promptsUsed >= 5 ? 'Available tomorrow' : `${5 - promptsUsed} left today`;
+    applyQuotaMeter();
     sendBtn.disabled = promptsUsed >= 5;
 }
 
@@ -143,7 +156,7 @@ function addMessage(text, sender, scroll = true) {
     if (welcomeState.parentElement === chatMessages) welcomeState.remove();
     const messageDiv = document.createElement('div'); messageDiv.className = `message ${sender}`;
     const avatar = document.createElement('img'); avatar.className = 'avatar';
-    avatar.src = sender === 'bot' ? '/static/Noviq%20AI%20Glossy%20Ribbon%20Logo.png' : '/static/user-avatar.svg'; avatar.alt = sender === 'bot' ? 'Noviq AI' : 'Your message';
+    avatar.src = sender === 'bot' ? '/static/ChatGPT%20Image%20Sep%2011,%202026,%2003_01_07%20AM.png' : '/static/user-avatar.svg'; avatar.alt = sender === 'bot' ? 'Noviq AI' : 'Your message';
     const content = document.createElement('div'); content.className = 'message-content';
     if (sender === 'bot') content.innerHTML = formatAssistantMessage(text); else content.textContent = text;
     messageDiv.append(avatar, content); chatMessages.appendChild(messageDiv);
@@ -159,12 +172,12 @@ function showThinkingMessage() {
 
     const avatar = document.createElement('img');
     avatar.className = 'avatar';
-    avatar.src = '/static/Noviq%20AI%20Glossy%20Ribbon%20Logo.png';
+    avatar.src = '/static/ChatGPT%20Image%20Sep%2011,%202026,%2003_01_07%20AM.png';
     avatar.alt = 'Noviq AI';
 
     const content = document.createElement('div');
     content.className = 'message-content';
-    content.innerHTML = '<div class="thinking-label"><span class="thinking-dot"></span>Noviq is thinking...</div>';
+    content.innerHTML = '<div class="thinking-label"><span class="thinking-dot"></span><span class="thinking-dot"></span><span class="thinking-dot"></span></div>';
 
     pendingThinkingMessage.append(avatar, content);
     chatMessages.appendChild(pendingThinkingMessage);
@@ -339,6 +352,16 @@ function closeSidebar() { sidebar.classList.remove('open'); mobileBackdrop.class
 function toggleSidebar() { sidebar.classList.toggle('open'); mobileBackdrop.classList.toggle('visible'); }
 function setSidebarVisibility(hidden) { appShell.classList.toggle('sidebar-hidden', hidden); localStorage.setItem('noviq-sidebar-hidden', hidden ? '1' : '0'); }
 
+function showShareToast() {
+    if (!shareToast) return;
+
+    shareToast.classList.add('show');
+    clearTimeout(shareToastTimer);
+    shareToastTimer = setTimeout(() => {
+        shareToast.classList.remove('show');
+    }, 1800);
+}
+
 async function shareChat() {
     if (!currentChat || !currentChat.messages.length) {
         alert('Start a chat first, then share it with a link.');
@@ -355,6 +378,7 @@ async function shareChat() {
         await navigator.clipboard.writeText(shareLink);
         shareButton.setAttribute('aria-label', 'Link copied');
         shareButton.title = 'Link copied';
+        showShareToast();
         setTimeout(() => {
             shareButton.setAttribute('aria-label', 'Share chat');
             shareButton.title = 'Share chat';
