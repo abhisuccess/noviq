@@ -75,3 +75,167 @@ button, textarea, input, select { font: inherit; } button { border: 0; cursor: p
 .quota-label { color: #8b96a5; font-size: 10px; white-space: nowrap; }
 .composer-options select option:disabled { color: #9ca6b4; }
 @media (max-width: 520px) { .topbar-brand .noviq-logo { width: 150px; }.quota-label { display: none; }.quota-meter { margin-left: 0; } }
+
+body.dark-mode {
+    --ink: #edf4ff;
+    --muted: #a4b6d5;
+    --line: #23324a;
+    --panel: #111d2d;
+    --canvas: #0b1220;
+    --accent: #7aa5ff;
+    --accent-soft: #162846;
+    --sidebar: #0f1828;
+}
+
+body.dark-mode .sidebar,
+body.dark-mode .history-item:hover,
+body.dark-mode .history-item.active,
+body.dark-mode .search-box,
+body.dark-mode .composer,
+body.dark-mode .composer::after,
+body.dark-mode .prompt-card,
+body.dark-mode .message.bot .message-content,
+body.dark-mode .about-dialog,
+body.dark-mode .about-grid div,
+body.dark-mode .dialog-close,
+body.dark-mode .profile-row,
+body.dark-mode .profile-avatar,
+body.dark-mode .topbar-actions .quiet-button,
+body.dark-mode .topbar-actions .about-button {
+    background-color: var(--panel);
+}
+
+body.dark-mode .sidebar,
+body.dark-mode .main-panel,
+body.dark-mode .message.user .message-content,
+body.dark-mode .message.bot .message-content,
+body.dark-mode .composer,
+body.dark-mode .composer::after,
+body.dark-mode .prompt-card,
+body.dark-mode .about-dialog,
+body.dark-mode .about-grid div,
+body.dark-mode .search-box,
+body.dark-mode .history-item.active,
+body.dark-mode .topbar,
+body.dark-mode .topbar-actions .quiet-button,
+body.dark-mode .topbar-actions .about-button {
+    border-color: var(--line);
+}
+
+body.dark-mode .brand-name,
+body.dark-mode .mobile-brand,
+body.dark-mode .topbar-brand,
+body.dark-mode .message-content h2,
+body.dark-mode .message-content h3,
+body.dark-mode .message-content h4,
+body.dark-mode .about-dialog h2,
+body.dark-mode .welcome-state h1,
+body.dark-mode .history-item,
+body.dark-mode .composer textarea,
+body.dark-mode .search-box input,
+body.dark-mode .composer-options select,
+body.dark-mode .composer-options label,
+body.dark-mode .composer-hint,
+body.dark-mode .disclaimer,
+body.dark-mode .profile-row strong,
+body.dark-mode .profile-row small,
+body.dark-mode .connection-state,
+body.dark-mode .about-dialog p,
+body.dark-mode .about-dialog span {
+    color: var(--ink);
+}
+
+body.dark-mode .about-dialog p:not(.eyebrow):not(.about-signoff),
+body.dark-mode .welcome-copy,
+body.dark-mode .prompt-card small,
+body.dark-mode .prompt-card strong,
+body.dark-mode .quota-label,
+body.dark-mode .history-empty,
+body.dark-mode .composer-hint,
+body.dark-mode .disclaimer,
+body.dark-mode .sidebar .connection-state,
+body.dark-mode .history-item,
+body.dark-mode .brand-row .brand-name,
+body.dark-mode .topbar-actions .quiet-button,
+body.dark-mode .topbar-actions .about-button,
+body.dark-mode .topbar-actions button {
+    color: var(--muted);
+}
+
+body.dark-mode .prompt-card:hover { border-color: #7aa5ff; box-shadow: 0 10px 25px rgba(122, 165, 255, 0.18); }
+body.dark-mode .new-chat-button { background: linear-gradient(135deg, #5a82ff, #7e68ee); }
+body.dark-mode .new-chat-button:hover { background: linear-gradient(135deg, #4f74eb, #6f5ce7); }
+body.dark-mode .message.user .message-content { background: rgba(122, 165, 255, 0.22); color: var(--ink); border-color: rgba(122, 165, 255, 0.45); }
+body.dark-mode .message.user .avatar { background: rgba(122, 165, 255, 0.18); }
+body.dark-mode .message.bot .message-content { background: var(--panel); box-shadow: 0 8px 24px rgba(8, 14, 24, 0.45); }
+body.dark-mode .composer { background: rgba(17, 29, 45, 0.92); }
+body.dark-mode .composer::after { background: rgba(17, 29, 45, 0.96); }
+body.dark-mode .composer textarea::placeholder { color: #8ea7c9; }
+body.dark-mode .composer-options select { background: rgba(14, 21, 31, 0.95); }
+body.dark-mode .history-list::-webkit-scrollbar-thumb, body.dark-mode .conversation::-webkit-scrollbar-thumb { background: #385074; }
+body.dark-mode .typing-indicator { background: rgba(17, 29, 45, 0.96); border-color: var(--line); }
+body.dark-mode .topbar { background: rgba(11, 18, 32, 0.75); }
+body.dark-mode .tabbar-actions .quiet-button, body.dark-mode .topbar-actions .about-button { background: var(--panel); }
+body.dark-mode .message.bot.thinking .avatar {
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 0 2px rgba(146, 87, 255, 0.75), 0 0 14px rgba(60, 213, 255, 0.95), 0 0 26px rgba(255, 96, 163, 0.82);
+}
+body.dark-mode .message.bot.thinking .message-content {
+    border-color: rgba(122, 165, 255, 0.7);
+    box-shadow: 0 0 0 1px rgba(122, 165, 255, 0.25), 0 0 16px rgba(122, 165, 255, 0.28);
+}
+body.dark-mode .thinking-dot { background: linear-gradient(135deg, #7aa5ff, #ff7dd0); box-shadow: 0 0 12px rgba(95, 209, 255, 0.9); }
+body.dark-mode .about-dialog::backdrop { background: rgba(7, 13, 24, 0.8); }
+
+.message.bot.thinking .avatar {
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 0 2px rgba(112, 111, 255, 0.8), 0 0 18px rgba(70, 180, 255, 0.9), 0 0 32px rgba(255, 124, 196, 0.95);
+}
+
+.message.bot.thinking .message-content {
+    border-color: rgba(112, 111, 255, 0.55);
+    box-shadow: 0 0 0 1px rgba(112, 111, 255, 0.2), 0 0 16px rgba(112, 111, 255, 0.25);
+}
+
+.thinking-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.thinking-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #325cdb, #b04ae8);
+    box-shadow: 0 0 10px rgba(75, 141, 255, 0.85);
+    animation: pulseThinking 1.2s ease-in-out infinite;
+}
+
+@keyframes pulseThinking {
+    0%, 100% { transform: scale(0.9); opacity: 0.75; }
+    50% { transform: scale(1.3); opacity: 1; }
+}
+
+body.dark-mode .quiet-button,
+body.dark-mode .about-button {
+    border-color: var(--line);
+    background: var(--panel);
+    color: var(--muted);
+}
+
+body.dark-mode .about-button:hover,
+body.dark-mode .quiet-button:hover {
+    background: rgba(122, 165, 255, 0.14);
+}
+
+body.dark-mode .message-content strong { color: #7aa5ff; }
+body.dark-mode .message-content em { color: #bed3ff; }
+body.dark-mode .message-content code { background: rgba(122, 165, 255, 0.12); color: #cfe1ff; }
+body.dark-mode .message-content pre { background: rgba(14, 21, 31, 0.95); border-color: var(--line); color: #ddedff; }
+body.dark-mode .table-line { border-color: var(--line); }
+body.dark-mode .history-empty { color: #8bacd7; }
+body.dark-mode .search-box input::placeholder { color: #7e95b4; }
+body.dark-mode .status-dot.online { box-shadow: 0 0 0 3px rgba(53, 174, 121, 0.2); }

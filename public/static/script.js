@@ -18,14 +18,65 @@ const installButton = document.getElementById('installButton');
 const quotaMeter = document.getElementById('quotaMeter');
 const quotaLabel = document.getElementById('quotaLabel');
 const thinkingText = document.getElementById('thinkingText');
+const themeToggle = document.getElementById('themeToggle');
+const shareButton = document.getElementById('shareButton');
 const STORAGE_KEY = 'noviq-ai-chats';
 const DEVICE_KEY = 'noviq-ai-device-id';
+const THEME_KEY = 'noviq-theme';
 let conversations = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 let deviceId = localStorage.getItem(DEVICE_KEY);
 let currentChat = null;
 let deferredInstallPrompt = null;
 let promptsUsed = Number(localStorage.getItem('noviq-prompts-used') || 0);
 let quotaResetAt = localStorage.getItem('noviq-quota-reset-at') || '';
+let pendingThinkingMessage = null;
+
+function safeJsonParse(value, fallback) {
+    try { return JSON.parse(value || 'null') ?? fallback; } catch { return fallback; }
+}
+
+function setTheme(theme) {
+    const isDark = theme === 'dark';
+    document.body.classList.toggle('dark-mode', isDark);
+    localStorage.setItem(THEME_KEY, theme);
+    if (themeToggle) themeToggle.textContent = isDark ? 'Light mode' : 'Dark mode';
+}
+
+function normalizeSharedChat(chat) {
+    if (!chat || !Array.isArray(chat.messages)) return null;
+    return {
+        id: chat.id || 'shared_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+        title: String(chat.title || 'Shared conversation').trim() || 'Shared conversation',
+        messages: chat.messages
+            .filter(message => message && typeof message.text === 'string')
+            .map(message => ({ text: message.text, sender: message.sender === 'user' ? 'user' : 'bot' }))
+            .slice(-200)
+    };
+}
+
+function readSharedChatFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const rawChat = params.get('chat') || params.get('share');
+    if (!rawChat) return null;
+    try {
+        return normalizeSharedChat(JSON.parse(rawChat));
+    } catch {
+        return null;
+    }
+}
+
+function buildShareUrl() {
+    if (!currentChat || !currentChat.messages.length) return '';
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('chat', JSON.stringify({
+        id: currentChat.id,
+        title: currentChat.title,
+        messages: currentChat.messages.slice(-200)
+    }));
+    return url.toString();
+}
+
 if (quotaResetAt && Date.now() >= Date.parse(quotaResetAt)) { promptsUsed = 0; localStorage.removeItem('noviq-prompts-used'); localStorage.removeItem('noviq-quota-reset-at'); }
 if (!deviceId) { deviceId = crypto.randomUUID ? crypto.randomUUID() : 'device_' + Date.now() + '_' + Math.random().toString(36).slice(2); localStorage.setItem(DEVICE_KEY, deviceId); }
 
@@ -75,6 +126,7 @@ function renderMessages() {
 
 function openChat(id) { currentChat = conversations.find(chat => chat.id === id) || null; renderMessages(); renderHistory(historySearch.value); closeSidebar(); }
 function startNewChat() { currentChat = makeChat(); renderMessages(); renderHistory(); userInput.focus(); closeSidebar(); }
+
 async function deleteChat(id) {
     const chat = conversations.find(item => item.id === id);
     if (!chat || !confirm(`Delete "${chat.title}"?`)) return;
@@ -87,15 +139,42 @@ function addMessage(text, sender, scroll = true) {
     if (welcomeState.parentElement === chatMessages) welcomeState.remove();
     const messageDiv = document.createElement('div'); messageDiv.className = `message ${sender}`;
     const avatar = document.createElement('img'); avatar.className = 'avatar';
-        avatar.src = sender === 'bot' ? '/static/Noviq%20AI%20Glossy%20Ribbon%20Logo.png' : '/static/user-avatar.svg'; avatar.alt = sender === 'bot' ? 'Noviq AI' : 'Your message';
+    avatar.src = sender === 'bot' ? '/static/Noviq%20AI%20Glossy%20Ribbon%20Logo.png' : '/static/user-avatar.svg'; avatar.alt = sender === 'bot' ? 'Noviq AI' : 'Your message';
     const content = document.createElement('div'); content.className = 'message-content';
     if (sender === 'bot') content.innerHTML = formatAssistantMessage(text); else content.textContent = text;
     messageDiv.append(avatar, content); chatMessages.appendChild(messageDiv);
     if (scroll) chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
+function showThinkingMessage() {
+    if (!currentChat || pendingThinkingMessage) return;
+    if (welcomeState.parentElement === chatMessages) welcomeState.remove();
+
+    pendingThinkingMessage = document.createElement('div');
+    pendingThinkingMessage.className = 'message bot thinking';
+
+    const avatar = document.createElement('img');
+    avatar.className = 'avatar';
+    avatar.src = '/static/Noviq%20AI%20Glossy%20Ribbon%20Logo.png';
+    avatar.alt = 'Noviq AI';
+
+    const content = document.createElement('div');
+    content.className = 'message-content';
+    content.innerHTML = '<div class="thinking-label"><span class="thinking-dot"></span>Noviq is thinking...</div>';
+
+    pendingThinkingMessage.append(avatar, content);
+    chatMessages.appendChild(pendingThinkingMessage);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function hideThinkingMessage() {
+    if (!pendingThinkingMessage) return;
+    pendingThinkingMessage.remove();
+    pendingThinkingMessage = null;
+}
+
 function escapeHtml(value) {
-    return value.replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
+    return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 }
 
 function formatAssistantMessage(value) {
@@ -112,34 +191,109 @@ function formatAssistantMessage(value) {
 async function checkConnection() {
     try {
         const response = await fetch('/models'); const data = await response.json();
-        statusIndicator.className = 'status-dot ' + (data.error ? 'warning' : 'online'); statusText.textContent = data.error ? 'Noviq limited' : 'Noviq connected';
-    } catch { statusIndicator.className = 'status-dot offline'; statusText.textContent = 'Server unavailable'; }
+        statusIndicator.className = 'status-dot ' + (data.error ? 'warning' : 'online');
+        statusText.textContent = data.error ? 'Noviq limited' : 'Noviq connected';
+    } catch {
+        statusIndicator.className = 'status-dot offline';
+        statusText.textContent = 'Server unavailable';
+    }
 }
 
 async function sendMessage() {
-    const message = userInput.value.trim(); if (!message || sendBtn.disabled) return;
+    const message = userInput.value.trim();
+    if (!message || sendBtn.disabled) return;
+
     if (!currentChat) currentChat = makeChat();
     if (!conversations.some(chat => chat.id === currentChat.id)) conversations.unshift(currentChat);
     if (currentChat.title === 'New conversation') currentChat.title = message.length > 38 ? message.slice(0, 38) + '…' : message;
-    currentChat.messages.push({ text: message, sender: 'user' }); saveChats(); renderHistory(); addMessage(message, 'user');
-    userInput.value = ''; userInput.style.height = 'auto'; typingIndicator.style.display = 'flex'; sendBtn.disabled = true;
+
+    currentChat.messages.push({ text: message, sender: 'user' });
+    saveChats();
+    renderHistory();
+    addMessage(message, 'user');
+
+    userInput.value = '';
+    userInput.style.height = 'auto';
+    showThinkingMessage();
+    typingIndicator.style.display = 'flex';
+    sendBtn.disabled = true;
     thinkingText.textContent = effortSelect.value === 'max' ? 'Noviq is thinking deeply...' : 'Noviq is thinking...';
+
     try {
-        const response = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-ID': deviceId }, body: JSON.stringify({ message, session_id: currentSession(), model: composerModelSelect.value, effort: effortSelect.value, prompt_count: promptsUsed, history: requestHistory().slice(0, -1) }) });
+        const response = await fetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Device-ID': deviceId },
+            body: JSON.stringify({
+                message,
+                session_id: currentSession(),
+                model: composerModelSelect.value,
+                effort: effortSelect.value,
+                prompt_count: promptsUsed,
+                history: requestHistory().slice(0, -1)
+            })
+        });
+
         const data = await response.json();
         updateQuota(data.quota);
         const reply = data.error ? '⚠️ ' + data.error : data.response;
-        currentChat.messages.push({ text: reply, sender: 'bot' }); saveChats(); addMessage(reply, 'bot');
-    } catch { const reply = '⚠️ Network error. Please try again.'; currentChat.messages.push({ text: reply, sender: 'bot' }); saveChats(); addMessage(reply, 'bot'); }
-    finally { typingIndicator.style.display = 'none'; thinkingText.textContent = 'Enter to send · Shift + Enter for a new line'; if (promptsUsed < 5) sendBtn.disabled = false; userInput.focus(); }
+
+        currentChat.messages.push({ text: reply, sender: 'bot' });
+        saveChats();
+        hideThinkingMessage();
+        addMessage(reply, 'bot');
+    } catch {
+        const reply = '⚠️ Network error. Please try again.';
+        currentChat.messages.push({ text: reply, sender: 'bot' });
+        saveChats();
+        hideThinkingMessage();
+        addMessage(reply, 'bot');
+    } finally {
+        typingIndicator.style.display = 'none';
+        thinkingText.textContent = 'Enter to send · Shift + Enter for a new line';
+        if (promptsUsed < 5) sendBtn.disabled = false;
+        userInput.focus();
+    }
 }
 
-async function resetChat() { if (currentChat?.messages.length) { try { await fetch('/reset', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-ID': deviceId }, body: JSON.stringify({ session_id: currentSession() }) }); } catch { /* local reset still works */ } } startNewChat(); }
+async function resetChat() {
+    if (currentChat?.messages.length) {
+        try {
+            await fetch('/reset', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-ID': deviceId }, body: JSON.stringify({ session_id: currentSession() }) });
+        } catch { /* local reset still works */ }
+    }
+    startNewChat();
+}
+
 function closeSidebar() { sidebar.classList.remove('open'); mobileBackdrop.classList.remove('visible'); }
 function toggleSidebar() { sidebar.classList.toggle('open'); mobileBackdrop.classList.toggle('visible'); }
 function setSidebarVisibility(hidden) { appShell.classList.toggle('sidebar-hidden', hidden); localStorage.setItem('noviq-sidebar-hidden', hidden ? '1' : '0'); }
 
-sendBtn.addEventListener('click', sendMessage); resetBtn.addEventListener('click', resetChat); document.getElementById('menuButton').addEventListener('click', toggleSidebar); document.getElementById('sidebarClose').addEventListener('click', closeSidebar); mobileBackdrop.addEventListener('click', closeSidebar);
+async function shareChat() {
+    if (!currentChat || !currentChat.messages.length) {
+        alert('Start a chat first, then share it with a link.');
+        return;
+    }
+
+    const shareLink = buildShareUrl();
+    if (!shareLink) {
+        alert('Unable to create a share link for this chat.');
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(shareLink);
+        shareButton.textContent = 'Link copied';
+        setTimeout(() => { shareButton.textContent = 'Share chat'; }, 1500);
+    } catch {
+        window.prompt('Copy this chat link:', shareLink);
+    }
+}
+
+sendBtn.addEventListener('click', sendMessage);
+resetBtn.addEventListener('click', resetChat);
+document.getElementById('menuButton').addEventListener('click', toggleSidebar);
+document.getElementById('sidebarClose').addEventListener('click', closeSidebar);
+mobileBackdrop.addEventListener('click', closeSidebar);
 document.getElementById('sidebarToggle').addEventListener('click', () => setSidebarVisibility(true));
 document.getElementById('desktopSidebarToggle').addEventListener('click', () => setSidebarVisibility(false));
 historySearch.addEventListener('input', () => renderHistory(historySearch.value));
@@ -152,12 +306,30 @@ installButton.addEventListener('click', async () => {
     if (deferredInstallPrompt) { deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; deferredInstallPrompt = null; installButton.hidden = true; return; }
     alert('To install Noviq AI: use your browser menu and choose "Install app" or "Add to Home Screen".');
 });
+if (themeToggle) themeToggle.addEventListener('click', () => setTheme(document.body.classList.contains('dark-mode') ? 'light' : 'dark'));
+if (shareButton) shareButton.addEventListener('click', shareChat);
 document.querySelectorAll('.prompt-card').forEach(card => card.addEventListener('click', () => { userInput.value = card.dataset.prompt; userInput.dispatchEvent(new Event('input')); userInput.focus(); }));
 userInput.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 145) + 'px'; });
 userInput.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); } });
 document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); startNewChat(); } });
 
-if (conversations.length) openChat(conversations[0].id); else startNewChat();
+const sharedChat = readSharedChatFromUrl();
+if (sharedChat) {
+    conversations = [sharedChat, ...conversations.filter(chat => chat.id !== sharedChat.id)];
+    currentChat = sharedChat;
+    saveChats();
+}
+
+if (currentChat) {
+    renderMessages();
+    renderHistory(historySearch.value);
+} else if (conversations.length) {
+    openChat(conversations[0].id);
+} else {
+    startNewChat();
+}
+
 setSidebarVisibility(localStorage.getItem('noviq-sidebar-hidden') === '1');
 restoreQuota();
 checkConnection();
+setTheme(localStorage.getItem(THEME_KEY) || 'light');
