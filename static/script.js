@@ -40,9 +40,9 @@ function setTheme(theme) {
     document.body.classList.toggle('dark-mode', isDark);
     localStorage.setItem(THEME_KEY, theme);
     if (themeToggle) {
-        themeToggle.innerHTML = `<span aria-hidden="true">${isDark ? '☀' : '☾'}</span>`;
         themeToggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
         themeToggle.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+        themeToggle.classList.toggle('is-dark', isDark);
     }
 }
 
@@ -181,11 +181,21 @@ function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 }
 
-function applyInlineMarkdown(text) {
-    return text
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
-        .replace(/`([^`]+)`/g, '<code>$1</code>');
+function renderKaTeX(expression, displayMode) {
+    if (!window.katex) return escapeHtml(expression);
+
+    try {
+        return window.katex.renderToString(expression, {
+            displayMode,
+            throwOnError: false,
+            output: 'htmlAndMathml',
+            strict: false,
+            fleqn: false,
+            trust: false
+        });
+    } catch {
+        return escapeHtml(expression);
+    }
 }
 
 function formatAssistantMessage(value) {
@@ -194,36 +204,59 @@ function formatAssistantMessage(value) {
 
     const codeBlocks = [];
     source = source.replace(/```([\s\S]*?)```/g, (_match, code) => {
-        const token = `__CODE_BLOCK_${codeBlocks.length}__`;
+        const token = `<span data-codeblock="${codeBlocks.length}"></span>`;
         codeBlocks.push(`<pre><code>${escapeHtml(code.trim())}</code></pre>`);
         return token;
     });
 
-    source = escapeHtml(source);
-    const sections = source.split(/\n{2,}/).map(section => section.trim()).filter(Boolean);
+    const mathBlocks = [];
+    source = source.replace(/\\\[([\s\S]*?)\\\]/g, (_match, expression) => {
+        const token = `<span data-mathblock="${mathBlocks.length}"></span>`;
+        mathBlocks.push(renderKaTeX(expression.trim(), true));
+        return token;
+    });
 
-    return sections.map((section) => {
-        if (section.startsWith('__CODE_BLOCK_')) {
-            const index = Number(section.match(/\d+/)[0]);
-            return codeBlocks[index] || '';
-        }
+    const mathInlines = [];
+    source = source.replace(/\\\(([^\n]*?)\\\)/g, (_match, expression) => {
+        const token = `<span data-mathinline="${mathInlines.length}"></span>`;
+        mathInlines.push(renderKaTeX(expression.trim(), false));
+        return token;
+    });
 
-        if (section.startsWith('### ')) return `<h4>${applyInlineMarkdown(section.slice(4).trim())}</h4>`;
-        if (section.startsWith('## ')) return `<h3>${applyInlineMarkdown(section.slice(3).trim())}</h3>`;
-        if (section.startsWith('# ')) return `<h2>${applyInlineMarkdown(section.slice(2).trim())}</h2>`;
+    source = source.replace(/(^|[^\\])\$([^$\n]+?)\$/g, (_match, prefix, expression) => {
+        const token = `<span data-mathinline="${mathInlines.length}"></span>`;
+        mathInlines.push(renderKaTeX(expression.trim(), false));
+        return `${prefix}${token}`;
+    });
 
-        const lines = section.split('\n').map(line => line.trim()).filter(Boolean);
+    let html = '';
+    if (window.marked) {
+        html = window.marked.parse(source, {
+            gfm: true,
+            breaks: false,
+            headerIds: false,
+            mangle: false
+        });
+    } else {
+        html = source
+            .replace(/\n/g, '<br>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    }
 
-        if (lines.every(line => /^[-*]\s+/.test(line))) {
-            return `<ul>${lines.map(line => `<li>${applyInlineMarkdown(line.replace(/^[-*]\s+/, ''))}</li>`).join('')}</ul>`;
-        }
+    html = html
+        .replace(/<span data-codeblock="(\d+)"><\/span>/g, (_match, index) => codeBlocks[Number(index)] || '')
+        .replace(/<span data-mathblock="(\d+)"><\/span>/g, (_match, index) => mathBlocks[Number(index)] || '')
+        .replace(/<span data-mathinline="(\d+)"><\/span>/g, (_match, index) => mathInlines[Number(index)] || '');
 
-        if (lines.every(line => /^\d+\.\s+/.test(line))) {
-            return `<ol>${lines.map(line => `<li>${applyInlineMarkdown(line.replace(/^\d+\.\s+/, ''))}</li>`).join('')}</ol>`;
-        }
+    if (window.DOMPurify) {
+        html = window.DOMPurify.sanitize(html, {
+            USE_PROFILES: { html: true },
+            ADD_ATTR: ['target', 'rel']
+        });
+    }
 
-        return `<p>${applyInlineMarkdown(lines.join('<br>'))}</p>`;
-    }).join('');
+    return html;
 }
 
 async function checkConnection() {
@@ -320,11 +353,9 @@ async function shareChat() {
 
     try {
         await navigator.clipboard.writeText(shareLink);
-        shareButton.innerHTML = '<span aria-hidden="true">✓</span>';
         shareButton.setAttribute('aria-label', 'Link copied');
         shareButton.title = 'Link copied';
         setTimeout(() => {
-            shareButton.innerHTML = '<span aria-hidden="true">↗</span>';
             shareButton.setAttribute('aria-label', 'Share chat');
             shareButton.title = 'Share chat';
         }, 1500);
