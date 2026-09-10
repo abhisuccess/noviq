@@ -2,10 +2,10 @@ const PROMPT_LIMIT = 5;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const EFFORT_SETTINGS = {
-  standard: { maxOutputTokens: 2048, temperature: 0.7 },
-  medium: { maxOutputTokens: 4096, temperature: 0.6 },
-  high: { maxOutputTokens: 8192, temperature: 0.5 },
-  max: { maxOutputTokens: 16384, temperature: 0.4 }
+  standard: { maxOutputTokens: 8192, temperature: 0.7 },
+  medium: { maxOutputTokens: 12288, temperature: 0.6 },
+  high: { maxOutputTokens: 16384, temperature: 0.5 },
+  max: { maxOutputTokens: 24576, temperature: 0.4 }
 };
 
 const NOVIQ_SYSTEM_INSTRUCTION =
